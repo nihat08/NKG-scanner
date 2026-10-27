@@ -36,14 +36,52 @@ const AppProvider = ({ children }: { children: React.ReactNode }) => {
 const LoginScreen = ({ navigation }: any) => {
   const { setDriverId } = useContext(AppContext);
   const [pin, setPin] = useState('');
+  const [selectedDriver, setSelectedDriver] = useState('');
+  const [showDriverList, setShowDriverList] = useState(false);
+
+  // Gefundene Chauffeure von der NKG Website:
+  const drivers = [
+    'Aija Valdmane',
+    'Alojz Tement',
+    'Andrea Gutsche',
+    'Andreas Weixler',
+    'Celal Evgin',
+    'Christian Fritz-Grabher',
+    'Daniel Luzsak',
+    'Dietmar Luger',
+    'Dominik Maccani-Huber',
+    'Günter Dietrich',
+    'Harald Schneider',
+    'Hubert Bodemann',
+    'Jochen Campestrini',
+    'Josef Fessler',
+    'Klaus Hofer',
+    'Markus Felder',
+    'Martina Biesel',
+    'Michaela Greber',
+    'Philipp Starz',
+    'René Glatthaar',
+    'Robert Tschann',
+    'Sandra Fritz-Grabher',
+    'Slavo Dzamic',
+    'Stefan Ludvig',
+    'Zeljko Kurtovic',
+    'Gast-Fahrer'
+  ];
 
   const handleLogin = () => {
-    if (pin.length >= 3) {
-      setDriverId(pin);
+    if (!selectedDriver) {
+      Alert.alert('Fehler', 'Bitte wähle zuerst deinen Namen aus.');
+      return;
+    }
+    
+    // Hardcoded PIN "1111" für die Präsentation (Sicherheit wird später eingebaut)
+    if (pin === '1111') {
+      setDriverId(selectedDriver); // Speichert den echten Namen statt der PIN
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
       navigation.replace('Dashboard');
     } else {
-      Alert.alert('Fehler', 'Bitte gib eine gültige Fahrer-ID / PIN ein.');
+      Alert.alert('Zugriff verweigert', 'Falscher PIN. (Tipp für die Präsentation: 1111)');
     }
   };
 
@@ -53,19 +91,58 @@ const LoginScreen = ({ navigation }: any) => {
         <Text style={styles.loginLogo}>NKG</Text>
         <Text style={styles.loginSubtitle}>Fahrer-Terminal</Text>
         
-        <TextInput 
-          style={styles.loginInput} 
-          placeholder="Fahrer-ID / PIN (z.B. 1234)" 
-          placeholderTextColor="#999"
-          keyboardType="number-pad" 
-          value={pin} 
-          onChangeText={setPin} 
-          secureTextEntry
-        />
-        
-        <TouchableOpacity style={styles.loginButton} onPress={handleLogin}>
-          <Text style={styles.loginButtonText}>Anmelden</Text>
-        </TouchableOpacity>
+        {showDriverList ? (
+          <View style={styles.dropdownContainer}>
+            <Text style={{color: '#999', marginBottom: 10, textAlign: 'center'}}>Wer fährt heute?</Text>
+            <ScrollView style={styles.dropdownList} nestedScrollEnabled={true}>
+              {drivers.map(driver => (
+                <TouchableOpacity 
+                  key={driver} 
+                  style={styles.dropdownItem} 
+                  onPress={() => { 
+                    setSelectedDriver(driver); 
+                    setShowDriverList(false); 
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
+                >
+                  <Text style={styles.dropdownItemText}>{driver}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        ) : (
+          <>
+            <TouchableOpacity 
+              style={[styles.loginInput, { justifyContent: 'center' }]} 
+              onPress={() => setShowDriverList(true)}
+            >
+              <Text style={{ color: selectedDriver ? '#fff' : '#999', fontSize: 18, textAlign: 'center' }}>
+                {selectedDriver ? selectedDriver : 'Fahrer auswählen ▼'}
+              </Text>
+            </TouchableOpacity>
+
+            {selectedDriver ? (
+              <TextInput 
+                style={styles.loginInput} 
+                placeholder="4-stelliger PIN" 
+                placeholderTextColor="#999"
+                keyboardType="number-pad" 
+                maxLength={4}
+                value={pin} 
+                onChangeText={setPin} 
+                secureTextEntry
+              />
+            ) : null}
+            
+            <TouchableOpacity 
+              style={[styles.loginButton, { opacity: (selectedDriver && pin.length === 4) ? 1 : 0.5 }]} 
+              onPress={handleLogin}
+              disabled={!selectedDriver || pin.length !== 4}
+            >
+              <Text style={styles.loginButtonText}>Anmelden</Text>
+            </TouchableOpacity>
+          </>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -429,6 +506,10 @@ const styles = StyleSheet.create({
   loginInput: { width: '100%', backgroundColor: '#333', color: '#fff', padding: 15, borderRadius: 8, fontSize: 18, textAlign: 'center', marginBottom: 20 },
   loginButton: { backgroundColor: '#e91e63', width: '100%', padding: 15, borderRadius: 8, alignItems: 'center' },
   loginButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  dropdownContainer: { width: '100%', maxHeight: 250, marginBottom: 20 },
+  dropdownList: { backgroundColor: '#333', borderRadius: 8, borderWidth: 1, borderColor: '#555' },
+  dropdownItem: { padding: 15, borderBottomWidth: 1, borderBottomColor: '#444' },
+  dropdownItemText: { color: '#fff', fontSize: 18, textAlign: 'center' },
 
   dashboardContainer: { flex: 1, backgroundColor: '#f5f5f5', padding: 20, paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 20 : 50 },
   dashboardHeader: { marginBottom: 30 },
