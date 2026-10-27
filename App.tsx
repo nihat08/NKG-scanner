@@ -4,6 +4,8 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as Haptics from 'expo-haptics';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 
 // HIER DEINEN KOPIERTEN OPENAI API KEY EINTRAGEN:
 const OPENAI_API_KEY = process.env.EXPO_PUBLIC_OPENAI_API_KEY;
@@ -74,6 +76,63 @@ const LoginScreen = ({ navigation }: any) => {
 const DashboardScreen = ({ navigation }: any) => {
   const { driverId, scannedCards } = useContext(AppContext);
 
+  const exportToCSV = async () => {
+    if (scannedCards.length === 0) {
+      Alert.alert('Keine Daten', 'Es wurden noch keine Karten gescannt.');
+      return;
+    }
+
+    try {
+      // 1. Die Kopfzeile (Semikolon für Excel-Kompatibilität!)
+      let csvContent = 'Vorname;Nachname;E-Mail;Telefon;Abfahrt;Ziel;Newsletter\n';
+
+      // 2. Datenzeilen anhängen
+      scannedCards.forEach((card: any) => {
+        const cleanField = (field: any) => (field ? String(field).replace(/;/g, '') : '');
+        
+        const row = [
+          cleanField(card.vorname),
+          cleanField(card.nachname),
+          cleanField(card.email),
+          cleanField(card.telefon),
+          cleanField(card.abfahrt),
+          cleanField(card.ziel),
+          card.newsletter ? 'Ja' : 'Nein'
+        ].join(';');
+
+        csvContent += row + '\n';
+      });
+
+      // 3. Dateiname generieren
+      const date = new Date().toISOString().split('T')[0];
+      const fileName = `NKG_Export_Fahrer${driverId}_${date}.csv`;
+      const filePath = `${FileSystem.documentDirectory}${fileName}`;
+
+      // 4. Datei schreiben (mit UTF-8 BOM \uFEFF für saubere Umlaute in Excel)
+      await FileSystem.writeAsStringAsync(filePath, '\uFEFF' + csvContent, {
+        encoding: FileSystem.EncodingType.UTF8
+      });
+
+      // 5. Teilen-Menü öffnen
+      const isAvailable = await Sharing.isAvailableAsync();
+      if (isAvailable) {
+        await Sharing.shareAsync(filePath, {
+          mimeType: 'text/csv',
+          dialogTitle: 'Gewinnspiel-Daten exportieren',
+          UTI: 'public.comma-separated-values-text'
+        });
+        // Sicheres haptisches Feedback für Android
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); 
+      } else {
+        Alert.alert('Fehler', 'Das Teilen-Menü ist auf diesem Gerät nicht verfügbar.');
+      }
+
+    } catch (error) {
+      Alert.alert('Fehler beim Export', 'Die Datei konnte nicht erstellt werden.');
+      console.error(error);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.dashboardContainer}>
       <View style={styles.dashboardHeader}>
@@ -91,7 +150,11 @@ const DashboardScreen = ({ navigation }: any) => {
           <Text style={styles.dashboardBtnText}>📸 Neuen Scan starten</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={[styles.dashboardBtn, { backgroundColor: '#333', marginTop: 15 }]} onPress={() => alert('Der CSV-Export kommt morgen dran!')}>
+        <TouchableOpacity 
+          style={[styles.dashboardBtn, { backgroundColor: '#333', marginTop: 15, opacity: scannedCards.length === 0 ? 0.5 : 1 }]} 
+          onPress={exportToCSV}
+          disabled={scannedCards.length === 0}
+        >
           <Text style={styles.dashboardBtnText}>📤 Tagesdaten exportieren (CSV)</Text>
         </TouchableOpacity>
       </View>
@@ -151,7 +214,7 @@ const ScannerScreen = ({ navigation }: any) => {
           temperature: 0.0,
           messages: [
             { role: 'user', content: [
-                { type: 'text', text: 'Du bist ein präziser Daten-Extraktor. Lies die Felder auf diesem Bild. Rate niemals. Wenn ein Wort unleserlich oder leer ist, gib null aus. Gib AUSSCHLIESSLICH ein valides JSON-Objekt zurück mit den Schlüsseln: vorname, nachname, email, telefon, abfahrt, ziel, newsletter (als boolean true/false). Kein Markdown.' },
+                { type: 'text', text: 'Du bist ein präziser Daten-Extraktor für Gewinnspielkarten. Lies die Felder auf diesem Bild. Rate niemals. Wenn ein Textfeld leer ist, gib null aus. WICHTIG FÜR DIE CHECKBOX: Wenn das Kästchen unten links bei "Ja, ich möchte über Angebote..." in irgendeiner Form markiert ist (egal ob Kreuz, Haken, Strich oder ausgemalt), setze den Wert "newsletter" zwingend auf true! Nur wenn das Kästchen absolut schneeweiß und leer ist, setze false. Gib AUSSCHLIESSLICH ein valides JSON-Objekt zurück mit den Schlüsseln: vorname, nachname, email, telefon, abfahrt, ziel, newsletter (boolean). Kein Markdown.' },
                 { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${imageBase64}` } }
               ] }
           ],
@@ -169,10 +232,10 @@ const ScannerScreen = ({ navigation }: any) => {
 
       setEditData(parsedData);
       setStatusColor(evaluateData(parsedData));
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     } catch (error) {
       Alert.alert('Fehler', 'Scan fehlgeschlagen.');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     } finally {
       setIsScanning(false);
     }
